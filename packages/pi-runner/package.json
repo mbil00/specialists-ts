@@ -1,0 +1,26 @@
+{
+  "name": "@specialists/pi-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "pnpm run build && node dist/smoke.js",
+    "lint": "node -e \"console.log('lint not configured yet')\"",
+    "test": "node -e \"console.log('test not configured yet')\""
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.66.1",
+    "@mariozechner/pi-ai": "^0.66.1",
+    "@specialists/core": "workspace:*",
+    "@specialists/shared": "workspace:*",
+    "@specialists/web-tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  }
+}
