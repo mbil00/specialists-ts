@@ -99,10 +99,9 @@ export async function runWithPiSdk(
       }
       const answer = extractAssistantText(session.messages) || rawText.trim();
       const normalizedToolActivity = Array.from(toolActivity.values()).map(finalizeToolRecord);
-      const citations = dedupe([
-        ...extractUrls(answer),
-        ...normalizedToolActivity.flatMap((item) => item.citations),
-        ...normalizedToolActivity.flatMap((item) => item.visitedUrls),
+      const citations = finalizeCitations([
+        ...extractAnswerCitations(answer),
+        ...normalizedToolActivity.flatMap(selectHighSignalCitations),
       ]);
 
       return {
@@ -217,7 +216,15 @@ function handleSessionEvent(
         ...(existing?.visitedUrls ?? []),
         ...extractVisitedUrls(event.toolName, undefined, event.result),
       ]),
-      citations: extractCitations(event.toolName, event.result),
+      citations: extractCitations(
+        event.toolName,
+        event.result,
+        existing?.touchedFiles ?? [],
+        dedupe([
+          ...(existing?.visitedUrls ?? []),
+          ...extractVisitedUrls(event.toolName, undefined, event.result),
+        ]),
+      ),
     };
     toolActivity.set(event.toolCallId, merged);
   }
@@ -254,12 +261,18 @@ function extractTouchedFiles(toolName: string, args: unknown): string[] {
 
 function extractVisitedUrls(toolName: string, args: unknown, result: unknown): string[] {
   const urls = new Set<string>();
-  if (toolName === "web_fetch" && args && typeof args === "object") {
-    const url = (args as Record<string, unknown>).url;
-    if (typeof url === "string") {
-      const cleaned = sanitizeUrl(url);
-      if (cleaned) urls.add(cleaned);
+  if (toolName === "web_fetch") {
+    if (args && typeof args === "object") {
+      const url = (args as Record<string, unknown>).url;
+      if (typeof url === "string") {
+        const cleaned = sanitizeUrl(url);
+        if (cleaned) urls.add(cleaned);
+      }
     }
+    for (const url of extractFetchedPageUrls(result)) {
+      urls.add(url);
+    }
+    return Array.from(urls);
   }
   for (const url of collectUrls(result)) {
     urls.add(url);
@@ -267,10 +280,24 @@ function extractVisitedUrls(toolName: string, args: unknown, result: unknown): s
   return Array.from(urls);
 }
 
-function extractCitations(toolName: string, result: unknown): string[] {
+function extractCitations(toolName: string, result: unknown, touchedFiles: string[], visitedUrls: string[]): string[] {
   const urls = collectUrls(result);
+  const fileCitations = dedupe([
+    ...touchedFiles.map(normalizeRepoCitation).filter((value): value is string => Boolean(value)),
+    ...collectRepoCitations(result),
+  ]);
+
   if (toolName === "web_research") {
-    return dedupe(urls);
+    return dedupe([...visitedUrls, ...urls, ...fileCitations]);
+  }
+  if (toolName === "web_fetch") {
+    return dedupe(visitedUrls.slice(0, 20));
+  }
+  if (toolName === "read" || toolName === "edit" || toolName === "write") {
+    return dedupe(fileCitations.slice(0, 20));
+  }
+  if (toolName === "grep" || toolName === "find" || toolName === "ls" || toolName === "bash") {
+    return dedupe(fileCitations.slice(0, 20));
   }
   return dedupe(urls.slice(0, 20));
 }
@@ -316,8 +343,16 @@ function extractAssistantText(messages: readonly unknown[]): string {
   return "";
 }
 
+function extractAnswerCitations(text: string): string[] {
+  return dedupe([...extractUrls(text), ...extractRepoCitations(text)]);
+}
+
 function extractUrls(text: string): string[] {
-  return dedupe(Array.from(text.matchAll(/https?:\/\/[^\s"'`<>\\),]+/g)).map((match) => sanitizeUrl(match[0])).filter((value): value is string => Boolean(value)));
+  return dedupe(
+    Array.from(text.matchAll(/https?:\/\/[^\s"'`<>\\]+/g))
+      .map((match) => sanitizeUrl(match[0]))
+      .filter((value): value is string => Boolean(value)),
+  );
 }
 
 function collectUrls(value: unknown): string[] {
@@ -341,8 +376,98 @@ function collectUrls(value: unknown): string[] {
   return Array.from(urls);
 }
 
+function collectRepoCitations(value: unknown): string[] {
+  const citations = new Set<string>();
+  const visit = (node: unknown): void => {
+    if (typeof node === "string") {
+      for (const citation of extractRepoCitations(node)) {
+        citations.add(citation);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (node && typeof node === "object") {
+      for (const child of Object.values(node)) visit(child);
+    }
+  };
+  visit(value);
+  return Array.from(citations);
+}
+
+function extractFetchedPageUrls(value: unknown): string[] {
+  const urls = new Set<string>();
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const root = value as Record<string, unknown>;
+  const details = root.details;
+  if (details && typeof details === "object") {
+    const page = (details as Record<string, unknown>).page;
+    if (page && typeof page === "object") {
+      const record = page as Record<string, unknown>;
+      for (const key of ["requestedUrl", "finalUrl"]) {
+        const candidate = record[key];
+        if (typeof candidate === "string") {
+          const cleaned = sanitizeUrl(candidate);
+          if (cleaned) {
+            urls.add(cleaned);
+          }
+        }
+      }
+    }
+  }
+
+  const page = root.page;
+  if (page && typeof page === "object") {
+    const record = page as Record<string, unknown>;
+    for (const key of ["requestedUrl", "finalUrl"]) {
+      const candidate = record[key];
+      if (typeof candidate === "string") {
+        const cleaned = sanitizeUrl(candidate);
+        if (cleaned) {
+          urls.add(cleaned);
+        }
+      }
+    }
+  }
+
+  return Array.from(urls);
+}
+
+function extractRepoCitations(text: string): string[] {
+  const citations = new Set<string>();
+
+  for (const match of text.matchAll(/file:([^\s"'`<>\]\[(){}:,;]+)/g)) {
+    const candidate = match[1];
+    if (!candidate) {
+      continue;
+    }
+    const normalized = normalizeRepoCitation(candidate);
+    if (normalized) {
+      citations.add(normalized);
+    }
+  }
+
+  for (const match of text.matchAll(/(?:^|[\s("'`])((?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|toml|ya?ml|py|sh|sql))(?:$|[\s)"'`:,.;\]])/g)) {
+    const candidate = match[1];
+    if (!candidate) {
+      continue;
+    }
+    const normalized = normalizeRepoCitation(candidate);
+    if (normalized) {
+      citations.add(normalized);
+    }
+  }
+
+  return Array.from(citations);
+}
+
 function sanitizeUrl(value: string): string | undefined {
-  const trimmed = value.trim().replace(/[),.;]+$/g, "");
+  const trimmed = value.trim().replace(/^[\[<("'`]+|[\])>"'`.,;:]+$/g, "");
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
     return undefined;
   }
@@ -355,6 +480,77 @@ function sanitizeUrl(value: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeRepoCitation(value: string): string | undefined {
+  const trimmed = value.trim().replace(/^[\[<("'`]+|[\])>"'`.,;:]+$/g, "").replace(/^file:/, "");
+  if (!trimmed || trimmed === "." || trimmed === "..") {
+    return undefined;
+  }
+  if (!/[./]/.test(trimmed) && !/^[A-Za-z0-9_.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|toml|ya?ml|py|sh|sql)$/.test(trimmed)) {
+    return undefined;
+  }
+  if (!/[A-Za-z0-9_-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|toml|ya?ml|py|sh|sql)$/.test(trimmed)) {
+    return undefined;
+  }
+  return `file:${trimmed.replace(/^\.\//, "")}`;
+}
+
+function selectHighSignalCitations(item: ToolActivityRecord): string[] {
+  switch (item.toolKind) {
+    case "web_fetch":
+    case "web_research":
+    case "repo":
+    case "edit":
+    case "write":
+      return item.citations;
+    case "web_search":
+    case "other":
+    default:
+      return [];
+  }
+}
+
+function finalizeCitations(values: string[]): string[] {
+  return pruneRedundantUrls(dedupe(values));
+}
+
+function pruneRedundantUrls(values: string[]): string[] {
+  return values.filter((value) => {
+    if (!value.startsWith("http://") && !value.startsWith("https://")) {
+      return true;
+    }
+    let current: URL;
+    try {
+      current = new URL(value);
+    } catch {
+      return true;
+    }
+    const currentPath = normalizeUrlPath(current.pathname);
+    return !values.some((other) => {
+      if (other === value || (!other.startsWith("http://") && !other.startsWith("https://"))) {
+        return false;
+      }
+      try {
+        const candidate = new URL(other);
+        if (candidate.origin !== current.origin) {
+          return false;
+        }
+        const candidatePath = normalizeUrlPath(candidate.pathname);
+        if (candidatePath === currentPath) {
+          return false;
+        }
+        return candidatePath.startsWith(currentPath === "/" ? "/" : `${currentPath}/`) && candidatePath.length > currentPath.length;
+      } catch {
+        return false;
+      }
+    });
+  });
+}
+
+function normalizeUrlPath(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/g, "");
+  return trimmed || "/";
 }
 
 function dedupe(values: string[]): string[] {
