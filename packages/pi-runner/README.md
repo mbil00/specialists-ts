@@ -14,6 +14,13 @@ This package currently provides:
 - tool activity normalization
 - a smoke test for end-to-end specialist execution
 
+## Default model
+
+The specialist runner currently defaults to:
+
+- provider: `openai-codex`
+- model: `gpt-5.4`
+
 ## Smoke testing
 
 From the monorepo root:
@@ -26,7 +33,7 @@ Example:
 
 ```bash
 pnpm --filter @specialists/pi-runner smoke -- \
-  --specialist-kind graph_api \
+  --specialist-kind graph-api \
   --specialist-name "Microsoft Graph Specialist" \
   --question "Find the official Microsoft Graph API docs for assignLicense and summarize the endpoint and permission." \
   --grounding-mode web_only

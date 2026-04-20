@@ -15,6 +15,7 @@ Pi extension package that provides first-class web grounding tools:
 
 ### Research
 - delegated Pi subagent using `web_search` + `web_fetch`
+- default delegated model: `openai-codex/gpt-5.4-mini`
 
 ### Fetch
 - direct HTTP fetch + HTML extraction via Readability
@@ -30,7 +31,7 @@ Pi extension package that provides first-class web grounding tools:
 | `SPECIALISTS_WEB_FETCH_USER_AGENT` | `specialists-ts/0.1 (+https://pi.dev)` | User-Agent for `web_fetch` |
 | `SPECIALISTS_WEB_SEARCH_DEFAULT_MAX_RESULTS` | `5` | Default max search results |
 | `SPECIALISTS_WEB_RESEARCH_PI_COMMAND` | `pi` | Pi command used for delegated research |
-| `SPECIALISTS_WEB_RESEARCH_MODEL` | - | Optional model override for the web research subagent |
+| `SPECIALISTS_WEB_RESEARCH_MODEL` | `openai-codex/gpt-5.4-mini` | Model for the web research subagent |
 | `SPECIALISTS_WEB_RESEARCH_THINKING` | `medium` | Thinking level for the web research subagent |
 | `SPECIALISTS_WEB_RESEARCH_TIMEOUT_MS` | `120000` | Timeout for delegated research |
 | `SPECIALISTS_WEB_RESEARCH_DEFAULT_MAX_PAGES` | `4` | Default number of pages to inspect deeply |

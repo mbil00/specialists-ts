@@ -13,6 +13,8 @@ export interface WebToolsConfig {
   webResearchExtensionPath?: string;
 }
 
+export const DEFAULT_WEB_RESEARCH_MODEL = "openai-codex/gpt-5.4-mini";
+
 export function loadWebToolsConfig(env: NodeJS.ProcessEnv = process.env): WebToolsConfig {
   return {
     searchProvider: coerceSearchProvider(env.SPECIALISTS_WEB_SEARCH_PROVIDER),
@@ -23,7 +25,7 @@ export function loadWebToolsConfig(env: NodeJS.ProcessEnv = process.env): WebToo
       trimToUndefined(env.SPECIALISTS_WEB_FETCH_USER_AGENT) ?? "specialists-ts/0.1 (+https://pi.dev)",
     defaultMaxResults: coercePositiveInt(env.SPECIALISTS_WEB_SEARCH_DEFAULT_MAX_RESULTS, 5),
     webResearchPiCommand: trimToUndefined(env.SPECIALISTS_WEB_RESEARCH_PI_COMMAND) ?? "pi",
-    webResearchModel: trimToUndefined(env.SPECIALISTS_WEB_RESEARCH_MODEL),
+    webResearchModel: trimToUndefined(env.SPECIALISTS_WEB_RESEARCH_MODEL) ?? DEFAULT_WEB_RESEARCH_MODEL,
     webResearchThinking: trimToUndefined(env.SPECIALISTS_WEB_RESEARCH_THINKING) ?? "medium",
     webResearchTimeoutMs: coercePositiveInt(env.SPECIALISTS_WEB_RESEARCH_TIMEOUT_MS, 120_000),
     defaultResearchMaxPages: coercePositiveInt(env.SPECIALISTS_WEB_RESEARCH_DEFAULT_MAX_PAGES, 4),
