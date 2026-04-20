@@ -20,9 +20,9 @@
   ],
   "capabilities": {
     "repoTools": true,
-    "webSearch": true,
-    "webResearch": true,
-    "webFetch": true,
+    "webSearch": false,
+    "webResearch": false,
+    "webFetch": false,
     "fileAuthoring": false
   },
   "outputContract": {
