@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "pnpm run build && tmpdir=$(mktemp -d /tmp/specialists-cli-smoke-XXXXXX) && node dist/index.js init --workspace-root \"$tmpdir\" && test -f \"$tmpdir/.mcp.json\" && test -f \"$tmpdir/.codex/config.toml\" && node dist/index.js list --workspace-root \"$tmpdir\"",
     "lint": "node -e \"console.log('lint not configured yet')\"",
     "test": "node -e \"console.log('test not configured yet')\""
   },

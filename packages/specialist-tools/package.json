@@ -1,24 +1,27 @@
 {
-  "name": "@specialists/api",
+  "name": "@specialists/specialist-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "smoke": "pnpm run build && node dist/smoke.js",
-    "mcp:stdio": "pnpm run build && node dist/index.js",
     "lint": "node -e \"console.log('lint not configured yet')\"",
     "test": "node -e \"console.log('test not configured yet')\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@mariozechner/pi-ai": "^0.66.1",
+    "@mariozechner/pi-coding-agent": "^0.66.1",
     "@specialists/core": "workspace:*",
-    "@specialists/pi-runner": "workspace:*",
-    "@specialists/web-tools": "workspace:*",
-    "zod": "^4.3.6"
+    "@specialists/pi-runner": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

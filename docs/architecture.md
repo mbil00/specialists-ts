@@ -16,6 +16,7 @@ A specialist is a reusable project consultant with:
 - durable artifacts
 - compact output packets
 - honest grounding metadata
+- a repo-defined identity the main agent can discover and call
 
 ## Core architectural decision
 
@@ -42,8 +43,12 @@ That means:
 ## System overview
 
 ```text
-Caller
+Operator
   -> specialists CLI / API
+  -> create / bootstrap / inspect / refresh specialists
+
+Main agent
+  -> Pi extension tools (`list_specialists`, `consult_specialist`)
   -> consultation pipeline
       -> load workspace + specialist profile
       -> retrieve memory + artifacts
@@ -112,6 +117,12 @@ Current scaffold covers:
 - fresh-session execution via Pi SDK
 - web-tools extension loading during SDK runs
 - tool activity normalization into shared execution results
+- workspace resolution bound to git root or current directory
+- workspace-local profile + consultation persistence under `.specialists/`
+- specialist bootstrap from repo anchor inspection
+- Pi-driven bootstrap refinement via repo and web synthesis passes
+- simple reusable memory/artifact persistence and retrieval under `.specialists/`
+- workspace-bound consultation orchestration in `packages/core`
 
 Important rule:
 
@@ -145,6 +156,22 @@ Expected responsibilities:
 - citation-ready outputs
 - truncation and caching
 - domain allow / deny policy if needed
+
+### packages/specialist-tools
+Owns the main-agent-facing Pi extension surface.
+
+Important boundary:
+
+- operator plane manages specialist lifecycle
+- main agent only lists and consults specialists
+
+Responsibilities:
+
+- expose `list_specialists`
+- expose `consult_specialist`
+- encourage the main agent to consult specialists before doing broad repo/web discovery itself
+- surface operator-managed specialist definitions from `.agents/specialists/*.json`
+- surface local operator overrides from `.specialists/templates/*.json`
 
 ### packages/shared
 Shared primitives only:
@@ -231,6 +258,8 @@ This feeds:
 
 A workspace is a project-scoped root with persistent identity.
 
+In addition to persistent state under `.specialists/`, a workspace may also include committed specialist definitions under `.agents/specialists/` so the main agent can discover repo-local specialists.
+
 Stores:
 
 - workspace id
@@ -242,6 +271,14 @@ Stores:
 ## Specialist template
 
 The reusable definition for a specialist kind.
+
+Templates come from operator-managed workspace sources:
+
+- repo-committed workspace templates under `.agents/specialists/*.json`
+- local-only overrides under `.specialists/templates/*.json`
+
+The main agent should not invent new specialist kinds at consultation time.
+If a specialist does not exist yet, the operator must create and bootstrap it first.
 
 Fields:
 
@@ -386,10 +423,16 @@ Bootstrap should remain explicit but simpler than the Python version.
 Suggested flow:
 
 1. inspect workspace anchors
-2. run repo-grounded Pi bootstrap pass
-3. run web-grounded Pi bootstrap pass
-4. synthesize specialist profile
-5. persist initial profile and evidence summary
+2. run a dedicated bootstrap planner on the initial specialist request
+3. split bootstrap into multiple repo and web workstreams when the planner decides parallel investigation is useful
+4. run repo-grounded bootstrap exploration workstreams in parallel when needed
+5. run web-grounded bootstrap research workstreams in parallel when needed
+6. run a bootstrap validation pass to verify the highest-impact claims
+7. synthesize the specialist profile from the distilled and validated bootstrap evidence
+8. persist initial profile and evidence summary
+
+Bootstrap should use stronger reasoning than normal consultation, because prompt quality determines downstream specialist quality.
+The specialist itself should not act as its own bootstrapper.
 
 Important:
 

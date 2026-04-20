@@ -105,7 +105,12 @@ Current scaffold status:
 - fresh-session Pi SDK execution exists
 - web-tools extension loading exists
 - tool activity normalization exists
-- deeper event/result shaping still needs refinement
+- workspace resolution exists
+- file-backed workspace/profile/consultation persistence exists under `.specialists/`
+- specialist bootstrap exists via repo anchor inspection plus Pi-driven repo/web synthesis
+- simple memory/artifact persistence and retrieval exist under `.specialists/`
+- workspace-bound consultation orchestration exists in `packages/core`
+- deeper event/result shaping, stronger knowledge models, and durable DB persistence still need refinement
 
 Port selectively from Python:
 
@@ -293,6 +298,12 @@ Success criteria:
 - first provider implementation
 - Pi extension tool registration
 
+### packages/specialist-tools
+- main-agent-facing Pi extension tools
+- repo specialist discovery
+- specialist consultation tool surface
+- strict agent plane limited to `list_specialists` and `consult_specialist`
+
 ### apps/cli
 - init
 - consult
@@ -370,6 +381,7 @@ The first milestone should be:
 
 - create workspace
 - create one specialist template/profile
+- let the main agent discover and call that specialist from the repo itself
 - run one Pi-backed consultation
 - use repo tools
 - use web search tools
