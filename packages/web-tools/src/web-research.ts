@@ -13,6 +13,8 @@ import type {
 } from "./types.js";
 
 const DEFAULT_EXTENSION_PATH = resolveDefaultExtensionPath();
+const MAX_STDIO_CAPTURE_BYTES = 512 * 1024;
+const MAX_ERROR_SUMMARY_CHARS = 4_000;
 
 function resolveDefaultExtensionPath(): string {
   const jsPath = fileURLToPath(new URL("./extension.js", import.meta.url));
@@ -114,8 +116,8 @@ async function runPiJsonMode(
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    let stdout = "";
-    let stderr = "";
+    const stdoutCapture = createBoundedCapture(MAX_STDIO_CAPTURE_BYTES);
+    const stderrCapture = createBoundedCapture(MAX_STDIO_CAPTURE_BYTES);
     let finalText = "";
     let buffer = "";
     let killedByAbort = false;
@@ -148,7 +150,7 @@ async function runPiJsonMode(
 
     proc.stdout.on("data", (data) => {
       const chunk = data.toString();
-      stdout += chunk;
+      stdoutCapture.append(chunk);
       buffer += chunk;
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -158,7 +160,7 @@ async function runPiJsonMode(
     });
 
     proc.stderr.on("data", (data) => {
-      stderr += data.toString();
+      stderrCapture.append(data.toString());
     });
 
     const timeout = setTimeout(() => {
@@ -184,8 +186,12 @@ async function runPiJsonMode(
         reject(new Error(`web_research subagent timed out after ${timeoutMs}ms.`));
         return;
       }
+
+      const stdout = stdoutCapture.render();
+      const stderr = stderrCapture.render();
       if ((code ?? 0) !== 0) {
-        reject(new Error(`web_research subagent failed with exit code ${code ?? 0}. ${stderr || stdout}`.trim()));
+        const detail = summarizeFailureOutput(stderr || stdout);
+        reject(new Error(`web_research subagent failed with exit code ${code ?? 0}.${detail ? ` ${detail}` : ""}`.trim()));
         return;
       }
       resolve({ finalText: finalText || stdout.trim(), stdout, stderr });
@@ -212,6 +218,46 @@ async function runPiJsonMode(
       }
     }
   });
+}
+
+function createBoundedCapture(limitBytes: number) {
+  let captured = "";
+  let totalBytes = 0;
+  let truncated = false;
+
+  return {
+    append(chunk: string) {
+      totalBytes += Buffer.byteLength(chunk);
+      if (truncated) {
+        return;
+      }
+      if (Buffer.byteLength(captured) + Buffer.byteLength(chunk) <= limitBytes) {
+        captured += chunk;
+        return;
+      }
+      const remainingBytes = Math.max(0, limitBytes - Buffer.byteLength(captured));
+      if (remainingBytes > 0) {
+        captured += Buffer.from(chunk).subarray(0, remainingBytes).toString("utf8");
+      }
+      truncated = true;
+    },
+    render(): string {
+      if (!truncated) {
+        return captured;
+      }
+      return `${captured}\n\n[truncated after ${limitBytes} bytes; total observed ${totalBytes} bytes]`;
+    },
+  };
+}
+
+function summarizeFailureOutput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.length > MAX_ERROR_SUMMARY_CHARS
+    ? `${trimmed.slice(0, MAX_ERROR_SUMMARY_CHARS - 3)}...`
+    : trimmed;
 }
 
 function normalizeResearchPack(
