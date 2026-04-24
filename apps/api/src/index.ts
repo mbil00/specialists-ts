@@ -24,7 +24,7 @@ const GroundingModeSchema = z.enum(["memory_only", "repo_only", "web_only", "rep
 const ResponseFormatSchema = z.enum(["packet", "markdown", "json", "text"]);
 
 const SpecialistSummarySchema = z.object({
-  slug: z.string(),
+  id: z.string(),
   name: z.string(),
   description: z.string(),
 });
@@ -45,7 +45,7 @@ const ConsultSpecialistOutputSchema = {
     rootPath: z.string(),
   }),
   specialist: z.object({
-    kind: z.string(),
+    id: z.string(),
     name: z.string(),
   }),
   consultationRecordPath: z.string(),
@@ -86,12 +86,12 @@ export function createSpecialistsMcpServer(workspaceRootOverride?: string): McpS
       const allTemplates = await listSpecialistTemplates(workspace);
       const specialists = await Promise.all(
         allTemplates.map(async (descriptor) => {
-          const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.kind);
+          const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.id);
           if (!profile) {
             return undefined;
           }
           return {
-            slug: descriptor.template.kind,
+            id: descriptor.template.id,
             name: descriptor.template.name,
             description: descriptor.template.description,
           };
@@ -99,7 +99,7 @@ export function createSpecialistsMcpServer(workspaceRootOverride?: string): McpS
       );
       const readySpecialists = specialists
         .filter((item): item is z.infer<typeof SpecialistSummarySchema> => item !== undefined)
-        .sort((left, right) => left.slug.localeCompare(right.slug));
+        .sort((left, right) => left.id.localeCompare(right.id));
 
       const structuredContent = {
         workspace: summarizeWorkspace(workspace),
@@ -124,7 +124,7 @@ export function createSpecialistsMcpServer(workspaceRootOverride?: string): McpS
       title: "Consult Specialist",
       description: "Consult an existing bootstrapped workspace specialist.",
       inputSchema: {
-        specialist_kind: z.string().describe("Specialist slug from list_specialists."),
+        specialist: z.string().describe("Specialist id from list_specialists."),
         question: z.string().describe("Question to ask the specialist."),
         task_brief: z.string().optional().describe("Optional task brief or extra context."),
         constraints: z.array(z.string()).optional().describe("Optional repeatable constraints."),
@@ -134,12 +134,12 @@ export function createSpecialistsMcpServer(workspaceRootOverride?: string): McpS
       },
       outputSchema: ConsultSpecialistOutputSchema,
     },
-    async ({ specialist_kind, question, task_brief, constraints, assumptions, response_format, grounding_mode }) => {
+    async ({ specialist, question, task_brief, constraints, assumptions, response_format, grounding_mode }) => {
       loadDotEnvFromAncestors(workspaceRootOverride ?? process.cwd());
       const pipeline = createSpecialistsPipeline();
       const result = await pipeline.consult({
         workspaceRoot: workspaceRootOverride,
-        specialistKind: specialist_kind,
+        specialistId: specialist,
         question,
         taskBrief: task_brief,
         constraints: constraints ?? [],
@@ -151,7 +151,7 @@ export function createSpecialistsMcpServer(workspaceRootOverride?: string): McpS
       const structuredContent = {
         workspace: summarizeWorkspace(result.workspace),
         specialist: {
-          kind: result.profile.specialistKind,
+          id: result.profile.specialistId,
           name: result.profile.snapshot.name,
         },
         consultationRecordPath: result.consultationRecordPath,
@@ -232,7 +232,7 @@ function renderSpecialistListText(
     `Available specialists: ${specialists.length}`,
   ];
   for (const specialist of specialists) {
-    lines.push("", `${specialist.slug} — ${specialist.name}`, specialist.description);
+    lines.push("", `${specialist.id} — ${specialist.name}`, specialist.description);
   }
   return lines.join("\n");
 }
@@ -240,7 +240,7 @@ function renderSpecialistListText(
 function renderConsultationText(result: z.infer<z.ZodObject<typeof ConsultSpecialistOutputSchema>>): string {
   const lines = [
     `Workspace: ${result.workspace.displayName} (${result.workspace.rootPath})`,
-    `Specialist: ${result.specialist.name} (${result.specialist.kind})`,
+    `Specialist: ${result.specialist.name} (${result.specialist.id})`,
     `Provider: ${result.provider}${result.model ? `/${result.model}` : ""}`,
     `Consultation record: ${result.consultationRecordPath}`,
     "",

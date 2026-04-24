@@ -10,7 +10,7 @@ import type {
 } from "@specialists/shared";
 
 import { extractAnswerSummary, parseJsonObject } from "./json.js";
-import { normalizeKind, type SpecialistTemplate } from "./templates.js";
+import { normalizeSpecialistId, type SpecialistTemplate } from "./templates.js";
 import {
   loadWorkspaceSpecialistProfile,
   saveWorkspaceSpecialistProfile,
@@ -131,11 +131,11 @@ const PREFERRED_EXTENSIONS = new Set([
 
 export async function bootstrapSpecialist(input: BootstrapSpecialistInput): Promise<BootstrapSpecialistResult> {
   if (!input.force) {
-    const existing = await loadWorkspaceSpecialistProfile(input.workspace, input.template.kind);
+    const existing = await loadWorkspaceSpecialistProfile(input.workspace, input.template.id);
     if (existing) {
       return {
         profile: existing,
-        profilePath: path.join(input.workspace.profilesDir, `${normalizeKind(input.template.kind)}.json`),
+        profilePath: path.join(input.workspace.profilesDir, `${normalizeSpecialistId(input.template.id)}.json`),
         created: false,
       };
     }
@@ -176,7 +176,7 @@ export async function bootstrapSpecialist(input: BootstrapSpecialistInput): Prom
     buildSynthesizedSummary(staticSummary, repoSummary, webSummary, validationSummary, plan);
 
   const snapshot: SpecialistProfileSnapshot = {
-    kind: input.template.kind,
+    id: input.template.id,
     name: synthesis?.name?.trim() || input.template.name,
     rolePrompt: [
       synthesis?.rolePrompt?.trim() || input.template.rolePrompt,
@@ -193,7 +193,7 @@ export async function bootstrapSpecialist(input: BootstrapSpecialistInput): Prom
   const profile: WorkspaceSpecialistProfile = {
     schemaVersion: 1,
     workspaceId: input.workspace.id,
-    specialistKind: input.template.kind,
+    specialistId: input.template.id,
     template: input.template,
     snapshot,
     workspaceContextSummary: summary,
@@ -267,7 +267,7 @@ function buildBootstrapQuery(
   taskBrief: string | undefined,
   constraints: string[],
 ): string {
-  return [template.kind, template.name, template.description, question, taskBrief, ...constraints]
+  return [template.id, template.name, template.description, question, taskBrief, ...constraints]
     .filter((value): value is string => Boolean(value && value.trim()))
     .join(" ");
 }
@@ -288,7 +288,7 @@ async function maybePlanBootstrap(
       workspaceRoot: input.workspace.rootPath,
       workspaceDisplayName: input.workspace.displayName,
       specialist: {
-        kind: "bootstrap_planner",
+        id: "bootstrap_planner",
         name: "Specialist Bootstrap Planner",
         rolePrompt: [
           "You are a dedicated bootstrap planner, not the final specialist.",
@@ -387,7 +387,7 @@ async function maybeRunRepoBootstrapPasses(
           workspaceRoot: input.workspace.rootPath,
           workspaceDisplayName: input.workspace.displayName,
           specialist: {
-            kind: "bootstrap_repo_explorer",
+            id: "bootstrap_repo_explorer",
             name: `Repository Bootstrap Explorer ${index + 1}`,
             rolePrompt: [
               "You are a dedicated repository exploration subagent used during specialist bootstrap.",
@@ -462,7 +462,7 @@ async function maybeRunWebBootstrapPasses(
           workspaceRoot: input.workspace.rootPath,
           workspaceDisplayName: input.workspace.displayName,
           specialist: {
-            kind: "bootstrap_web_researcher",
+            id: "bootstrap_web_researcher",
             name: `Web Bootstrap Researcher ${index + 1}`,
             rolePrompt: [
               "You are a dedicated web bootstrap researcher used during specialist bootstrap.",
@@ -538,7 +538,7 @@ async function maybeRunBootstrapValidationPass(
       workspaceRoot: input.workspace.rootPath,
       workspaceDisplayName: input.workspace.displayName,
       specialist: {
-        kind: "bootstrap_validator",
+        id: "bootstrap_validator",
         name: "Bootstrap Claim Validator",
         rolePrompt: [
           "You are a bootstrap claim validator, not the final specialist.",
@@ -629,7 +629,7 @@ async function maybeRunBootstrapSynthesis(
       workspaceRoot: input.workspace.rootPath,
       workspaceDisplayName: input.workspace.displayName,
       specialist: {
-        kind: "bootstrap_synthesizer",
+        id: "bootstrap_synthesizer",
         name: "Specialist Bootstrap Synthesizer",
         rolePrompt: [
           "You are a dedicated bootstrap synthesizer, not the final specialist.",

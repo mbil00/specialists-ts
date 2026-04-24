@@ -106,14 +106,22 @@ Creation and bootstrap stay in the operator CLI.
 Create a specialist definition with the CLI:
 
 ```bash
-node apps/cli/dist/index.js create --kind runtime-architect
+node apps/cli/dist/index.js create --specialist runtime-architect
 ```
 
 Then bootstrap it:
 
 ```bash
-node apps/cli/dist/index.js bootstrap --kind runtime-architect --question "Bootstrap this specialist for the current workspace."
+node apps/cli/dist/index.js bootstrap --specialist runtime-architect --question "Bootstrap this specialist for the current workspace."
 ```
+
+For a guided bootstrap that asks for operator context before running the model-driven bootstrap pipeline:
+
+```bash
+node apps/cli/dist/index.js bootstrap --specialist runtime-architect --interactive
+```
+
+The interactive answers are passed into the existing planner/repo/web/validation/synthesis bootstrap flow; they do not replace model bootstrap.
 
 You can inspect them with the CLI:
 

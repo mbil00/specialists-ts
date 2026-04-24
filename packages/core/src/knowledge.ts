@@ -11,7 +11,7 @@ interface PersistedMemoryRecord {
   schemaVersion: 1;
   id: string;
   workspaceId: string;
-  specialistKind: string;
+  specialistId: string;
   title: string;
   summary: string;
   citations: string[];
@@ -26,7 +26,7 @@ interface PersistedArtifactRecord {
   schemaVersion: 1;
   id: string;
   workspaceId: string;
-  specialistKind: string;
+  specialistId: string;
   title: string;
   summary: string;
   citations: string[];
@@ -39,11 +39,11 @@ interface PersistedArtifactRecord {
 
 export async function retrieveRelevantMemory(
   workspace: WorkspaceRecord,
-  specialistKind: string,
+  specialistId: string,
   queries: string[],
   limit: number = 4,
 ): Promise<MemorySnippet[]> {
-  const records = await loadRecords<PersistedMemoryRecord>(path.join(workspace.memoryDir, sanitizeName(specialistKind)));
+  const records = await loadRecords<PersistedMemoryRecord>(path.join(workspace.memoryDir, sanitizeName(specialistId)));
   return records
     .map((record) => ({ score: scoreRecord(queries, [record.title, record.summary, ...record.tags]), record }))
     .filter((item) => item.score > 0)
@@ -61,11 +61,11 @@ export async function retrieveRelevantMemory(
 
 export async function retrieveRelevantArtifacts(
   workspace: WorkspaceRecord,
-  specialistKind: string,
+  specialistId: string,
   queries: string[],
   limit: number = 3,
 ): Promise<ArtifactSnippet[]> {
-  const records = await loadRecords<PersistedArtifactRecord>(path.join(workspace.artifactsDir, sanitizeName(specialistKind)));
+  const records = await loadRecords<PersistedArtifactRecord>(path.join(workspace.artifactsDir, sanitizeName(specialistId)));
   return records
     .map((record) => ({ score: scoreRecord(queries, [record.title, record.summary, ...record.tags]), record }))
     .filter((item) => item.score > 0)
@@ -87,7 +87,7 @@ export async function persistConsultationKnowledge(input: {
   result: SpecialistExecutionResult;
 }): Promise<{ memoryId: string; artifactId: string }> {
   const { workspace, consultationId, request, result } = input;
-  const specialistDirName = sanitizeName(request.specialist.kind);
+  const specialistDirName = sanitizeName(request.specialist.id);
   const memoryDir = path.join(workspace.memoryDir, specialistDirName);
   const artifactDir = path.join(workspace.artifactsDir, specialistDirName);
   await mkdir(memoryDir, { recursive: true });
@@ -96,13 +96,13 @@ export async function persistConsultationKnowledge(input: {
   const timestamp = new Date().toISOString();
   const titleBase = request.task.question.trim().replace(/\s+/g, " ").slice(0, 100) || request.specialist.name;
   const summary = extractAnswerSummary(result.answer);
-  const tags = unique([...(request.specialist.tags ?? []), request.specialist.kind, ...extractTags(request.task.question)]).slice(0, 10);
+  const tags = unique([...(request.specialist.tags ?? []), request.specialist.id, ...extractTags(request.task.question)]).slice(0, 10);
 
   const memoryRecord: PersistedMemoryRecord = {
     schemaVersion: 1,
     id: randomUUID(),
     workspaceId: workspace.id,
-    specialistKind: request.specialist.kind,
+    specialistId: request.specialist.id,
     title: `${request.specialist.name}: ${titleBase}`,
     summary,
     citations: result.citations.slice(0, 12),
@@ -117,7 +117,7 @@ export async function persistConsultationKnowledge(input: {
     schemaVersion: 1,
     id: randomUUID(),
     workspaceId: workspace.id,
-    specialistKind: request.specialist.kind,
+    specialistId: request.specialist.id,
     title: `${request.specialist.name} packet: ${titleBase}`,
     summary,
     citations: result.citations.slice(0, 20),

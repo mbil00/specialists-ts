@@ -6,7 +6,7 @@ import type { ExecutionCapabilities } from "@specialists/shared";
 import type { WorkspaceRecord } from "./workspace.js";
 
 export interface SpecialistTemplate {
-  kind: string;
+  id: string;
   name: string;
   description: string;
   rolePrompt: string;
@@ -19,7 +19,7 @@ export interface SpecialistTemplate {
 }
 
 export interface SpecialistTemplateDefinition {
-  kind?: string;
+  id?: string;
   name?: string;
   description?: string;
   rolePrompt?: string;
@@ -39,7 +39,7 @@ export interface SpecialistTemplateDescriptor {
 
 export interface CreateWorkspaceSpecialistTemplateInput {
   workspace: WorkspaceRecord;
-  kind: string;
+  id: string;
   name?: string;
   description?: string;
   rolePrompt?: string;
@@ -54,15 +54,15 @@ export interface CreateWorkspaceSpecialistTemplateInput {
 }
 
 export class UnknownSpecialistError extends Error {
-  readonly kind: string;
-  readonly availableKinds: string[];
+  readonly id: string;
+  readonly availableIds: string[];
 
-  constructor(kind: string, availableKinds: string[]) {
-    const available = availableKinds.length > 0 ? availableKinds.join(", ") : "(none)";
-    super(`Specialist ${JSON.stringify(kind)} is not defined for this workspace. Available specialists: ${available}`);
+  constructor(id: string, availableIds: string[]) {
+    const available = availableIds.length > 0 ? availableIds.join(", ") : "(none)";
+    super(`Specialist ${JSON.stringify(id)} is not defined for this workspace. Available specialists: ${available}`);
     this.name = "UnknownSpecialistError";
-    this.kind = kind;
-    this.availableKinds = availableKinds;
+    this.id = id;
+    this.availableIds = availableIds;
   }
 }
 
@@ -81,34 +81,34 @@ export const DEFAULT_SPECIALIST_CAPABILITIES: ExecutionCapabilities = {
 
 export async function listSpecialistTemplates(workspace: WorkspaceRecord): Promise<SpecialistTemplateDescriptor[]> {
   return (await loadWorkspaceSpecialistTemplates(workspace.rootPath)).sort(
-    (left, right) => left.template.name.localeCompare(right.template.name) || left.template.kind.localeCompare(right.template.kind),
+    (left, right) => left.template.name.localeCompare(right.template.name) || left.template.id.localeCompare(right.template.id),
   );
 }
 
 export async function resolveSpecialistTemplate(
   workspace: WorkspaceRecord,
-  kind: string,
+  id: string,
 ): Promise<SpecialistTemplateDescriptor> {
-  const normalizedKind = normalizeKind(kind);
+  const normalizedId = normalizeSpecialistId(id);
   const workspaceTemplates = await loadWorkspaceSpecialistTemplates(workspace.rootPath);
-  const workspaceTemplate = workspaceTemplates.find((descriptor) => normalizeKind(descriptor.template.kind) === normalizedKind);
+  const workspaceTemplate = workspaceTemplates.find((descriptor) => normalizeSpecialistId(descriptor.template.id) === normalizedId);
   if (workspaceTemplate) {
     return workspaceTemplate;
   }
 
   throw new UnknownSpecialistError(
-    normalizedKind,
-    workspaceTemplates.map((descriptor) => descriptor.template.kind).sort((left, right) => left.localeCompare(right)),
+    normalizedId,
+    workspaceTemplates.map((descriptor) => descriptor.template.id).sort((left, right) => left.localeCompare(right)),
   );
 }
 
 export async function createWorkspaceSpecialistTemplate(
   input: CreateWorkspaceSpecialistTemplateInput,
 ): Promise<SpecialistTemplateDescriptor> {
-  const kind = normalizeKind(input.kind);
-  const base = createFallbackTemplate(kind);
+  const id = normalizeSpecialistId(input.id);
+  const base = createFallbackTemplate(id);
   const definition: SpecialistTemplateDefinition = {
-    kind,
+    id,
     name: input.name ?? base.name,
     description: input.description ?? base.description,
     rolePrompt: input.rolePrompt ?? base.rolePrompt,
@@ -125,13 +125,13 @@ export async function createWorkspaceSpecialistTemplate(
   const source = input.local ? "workspace_local" : "workspace_repo";
   const relativeDir = input.local ? [".specialists", "templates"] : [".agents", "specialists"];
   const dirPath = path.join(input.workspace.rootPath, ...relativeDir);
-  const filePath = path.join(dirPath, `${kind}.json`);
+  const filePath = path.join(dirPath, `${id}.json`);
 
   if (!input.force) {
     const existing = await loadWorkspaceSpecialistTemplates(input.workspace.rootPath);
-    const conflict = existing.find((descriptor) => normalizeKind(descriptor.template.kind) === kind);
+    const conflict = existing.find((descriptor) => normalizeSpecialistId(descriptor.template.id) === id);
     if (conflict) {
-      throw new Error(`Specialist ${JSON.stringify(kind)} already exists at ${conflict.sourcePath ?? conflict.source}.`);
+      throw new Error(`Specialist ${JSON.stringify(id)} already exists at ${conflict.sourcePath ?? conflict.source}.`);
     }
   }
 
@@ -139,16 +139,16 @@ export async function createWorkspaceSpecialistTemplate(
   await writeFile(filePath, `${JSON.stringify(definition, null, 2)}\n`, "utf8");
 
   return {
-    template: materializeTemplate(kind, definition, base),
+    template: materializeTemplate(id, definition, base),
     source,
     sourcePath: filePath,
   };
 }
 
-export function createFallbackTemplate(kind: string): SpecialistTemplate {
-  const humanName = kindToName(kind);
+export function createFallbackTemplate(id: string): SpecialistTemplate {
+  const humanName = idToName(id);
   return {
-    kind,
+    id,
     name: humanName,
     description: `Workspace-scoped specialist for ${humanName.toLowerCase()} tasks.`,
     rolePrompt: [
@@ -165,14 +165,14 @@ export function createFallbackTemplate(kind: string): SpecialistTemplate {
       "Do not bluff when repo or web evidence is missing.",
       "Do not ignore the workspace-specific context.",
     ],
-    tags: [normalizeKind(kind)],
+    tags: [normalizeSpecialistId(id)],
     capabilities: DEFAULT_SPECIALIST_CAPABILITIES,
     outputContract: DEFAULT_SPECIALIST_OUTPUT_CONTRACT,
   };
 }
 
-export function kindToName(kind: string): string {
-  return normalizeKind(kind)
+export function idToName(id: string): string {
+  return normalizeSpecialistId(id)
     .split(/[-_]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -183,7 +183,7 @@ export async function loadWorkspaceSpecialistTemplates(rootPath: string): Promis
   const descriptors: SpecialistTemplateDescriptor[] = [];
   for (const source of WORKSPACE_TEMPLATE_SOURCES) {
     const dirPath = path.join(rootPath, ...source.relativePath);
-    const templates = await readTemplateDirectory(dirPath, source.kind);
+    const templates = await readTemplateDirectory(dirPath, source.type);
     descriptors.push(...templates);
   }
   return descriptors;
@@ -209,11 +209,11 @@ async function readTemplateDirectory(
         try {
           const content = await readFile(filePath, "utf8");
           const parsed = JSON.parse(content) as SpecialistTemplateDefinition;
-          const fileKind = normalizeKind(path.basename(entry, ".json"));
-          const kind = normalizeKind(parsed.kind ?? fileKind);
-          const base = createFallbackTemplate(kind);
+          const fileId = normalizeSpecialistId(path.basename(entry, ".json"));
+          const id = normalizeSpecialistId(parsed.id ?? fileId);
+          const base = createFallbackTemplate(id);
           return {
-            template: materializeTemplate(kind, parsed, base),
+            template: materializeTemplate(id, parsed, base),
             source,
             sourcePath: filePath,
           };
@@ -227,12 +227,12 @@ async function readTemplateDirectory(
 }
 
 function materializeTemplate(
-  kind: string,
+  id: string,
   definition: SpecialistTemplateDefinition,
   base: SpecialistTemplate,
 ): SpecialistTemplate {
   return {
-    kind,
+    id,
     name: readString(definition.name) ?? base.name,
     description: readString(definition.description) ?? base.description,
     rolePrompt: readString(definition.rolePrompt) ?? base.rolePrompt,
@@ -265,15 +265,15 @@ function readStringArray(value: unknown, fallback: string[]): string[] {
 
 const WORKSPACE_TEMPLATE_SOURCES = [
   {
-    kind: "workspace_repo" as const,
+    type: "workspace_repo" as const,
     relativePath: [".agents", "specialists"],
   },
   {
-    kind: "workspace_local" as const,
+    type: "workspace_local" as const,
     relativePath: [".specialists", "templates"],
   },
 ];
 
-export function normalizeKind(kind: string): string {
-  return kind.trim().replace(/[_\s]+/g, "-").toLowerCase();
+export function normalizeSpecialistId(id: string): string {
+  return id.trim().replace(/[_\s]+/g, "-").toLowerCase();
 }

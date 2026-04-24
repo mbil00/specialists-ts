@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,14 +78,14 @@ async function main(): Promise<void> {
   }
 
   if (command === "create") {
-    const kind = args.values.get("kind")?.at(-1);
-    if (!kind) {
-      throw new Error("Missing required --kind for create command.");
+    const specialist = args.values.get("specialist")?.at(-1);
+    if (!specialist) {
+      throw new Error("Missing required --specialist for create command.");
     }
     const workspace = await resolveWorkspace(args.values.get("workspace-root")?.at(-1));
     const descriptor = await createWorkspaceSpecialistTemplate({
       workspace,
-      kind,
+      id: specialist,
       name: args.values.get("name")?.at(-1),
       description: args.values.get("description")?.at(-1),
       rolePrompt: args.values.get("role-prompt")?.at(-1),
@@ -103,7 +104,7 @@ async function main(): Promise<void> {
             rootPath: workspace.rootPath,
           },
           specialist: {
-            kind: descriptor.template.kind,
+            id: descriptor.template.id,
             name: descriptor.template.name,
             description: descriptor.template.description,
             source: descriptor.source,
@@ -112,7 +113,7 @@ async function main(): Promise<void> {
           nextStep: {
             command: "bootstrap",
             args: {
-              kind: descriptor.template.kind,
+              specialist: descriptor.template.id,
               question: `Bootstrap ${descriptor.template.name} for this workspace.`,
             },
           },
@@ -129,9 +130,9 @@ async function main(): Promise<void> {
     const templates = await listSpecialistTemplates(workspace);
     const specialists = await Promise.all(
       templates.map(async (descriptor) => {
-        const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.kind);
+        const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.id);
         return {
-          kind: descriptor.template.kind,
+          id: descriptor.template.id,
           name: descriptor.template.name,
           description: descriptor.template.description,
           tags: descriptor.template.tags,
@@ -162,16 +163,26 @@ async function main(): Promise<void> {
   }
 
   if (command === "bootstrap") {
-    const kind = args.values.get("kind")?.at(-1);
-    if (!kind) {
-      throw new Error("Missing required --kind for bootstrap command.");
+    const workspaceRoot = args.values.get("workspace-root")?.at(-1);
+    const interactiveContext = shouldRunInteractiveBootstrap(args)
+      ? await collectInteractiveBootstrapContext({
+          workspaceRoot,
+          id: args.values.get("specialist")?.at(-1),
+          question: args.values.get("question")?.at(-1),
+          taskBrief: args.values.get("task-brief")?.at(-1),
+          constraints: args.values.get("constraint") ?? [],
+        })
+      : undefined;
+    const specialist = interactiveContext?.id ?? args.values.get("specialist")?.at(-1);
+    if (!specialist) {
+      throw new Error("Missing required --specialist for bootstrap command.");
     }
     const result = await pipeline.bootstrap({
-      workspaceRoot: args.values.get("workspace-root")?.at(-1),
-      specialistKind: kind,
-      question: args.values.get("question")?.at(-1),
-      taskBrief: args.values.get("task-brief")?.at(-1),
-      constraints: args.values.get("constraint") ?? [],
+      workspaceRoot,
+      specialistId: specialist,
+      question: interactiveContext?.question ?? args.values.get("question")?.at(-1),
+      taskBrief: interactiveContext?.taskBrief ?? args.values.get("task-brief")?.at(-1),
+      constraints: interactiveContext?.constraints ?? args.values.get("constraint") ?? [],
       force: args.values.get("force")?.at(-1) === "true",
     });
     console.log(JSON.stringify(result, null, 2));
@@ -179,17 +190,17 @@ async function main(): Promise<void> {
   }
 
   if (command === "consult") {
-    const kind = args.values.get("kind")?.at(-1);
+    const specialist = args.values.get("specialist")?.at(-1);
     const question = args.values.get("question")?.at(-1);
-    if (!kind) {
-      throw new Error("Missing required --kind for consult command.");
+    if (!specialist) {
+      throw new Error("Missing required --specialist for consult command.");
     }
     if (!question) {
       throw new Error("Missing required --question for consult command.");
     }
     const result = await pipeline.consult({
       workspaceRoot: args.values.get("workspace-root")?.at(-1),
-      specialistKind: kind,
+      specialistId: specialist,
       question,
       taskBrief: args.values.get("task-brief")?.at(-1),
       constraints: args.values.get("constraint") ?? [],
@@ -207,7 +218,7 @@ async function main(): Promise<void> {
             rootPath: result.workspace.rootPath,
           },
           specialist: {
-            kind: result.profile.specialistKind,
+            id: result.profile.specialistId,
             name: result.profile.snapshot.name,
           },
           consultationRecordPath: result.consultationRecordPath,
@@ -225,6 +236,104 @@ async function main(): Promise<void> {
   }
 
   throw new Error(`Unknown command: ${command}`);
+}
+
+interface InteractiveBootstrapSeed {
+  workspaceRoot?: string;
+  id?: string;
+  question?: string;
+  taskBrief?: string;
+  constraints: string[];
+}
+
+function shouldRunInteractiveBootstrap(args: ReturnType<typeof parseArgs>): boolean {
+  return args.values.get("interactive")?.at(-1) === "true";
+}
+
+async function collectInteractiveBootstrapContext(seed: InteractiveBootstrapSeed): Promise<Required<InteractiveBootstrapSeed>> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("Interactive bootstrap requires a TTY. Pass --specialist/--question/--task-brief for non-interactive use.");
+  }
+
+  const workspace = await resolveWorkspace(seed.workspaceRoot);
+  const templates = await listSpecialistTemplates(workspace);
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.error("\nInteractive specialist bootstrap");
+    console.error("Answer what you know. Leave any prompt blank to skip it.\n");
+
+    let id = seed.id?.trim();
+    if (!id) {
+      if (templates.length > 0) {
+        console.error("Available specialists:");
+        templates.forEach((descriptor, index) => {
+          console.error(`  ${index + 1}. ${descriptor.template.id} — ${descriptor.template.description}`);
+        });
+      }
+      const rawSpecialist = await rl.question("Specialist id or number to bootstrap: ");
+      const selectedIndex = Number.parseInt(rawSpecialist.trim(), 10);
+      id = Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= templates.length
+        ? templates[selectedIndex - 1]?.template.id
+        : rawSpecialist.trim();
+    }
+    if (!id) {
+      throw new Error("Interactive bootstrap needs a specialist id.");
+    }
+
+    const answers = {
+      purpose: await askOptional(rl, "What should this specialist be responsible for? ", seed.question),
+      recurringTasks: await askOptional(rl, "What recurring tasks/questions should it handle well? "),
+      boundaries: await askOptional(rl, "What should it explicitly avoid or defer? "),
+      repoAreas: await askOptional(rl, "Which repo areas/files/workflows should bootstrap inspect first? "),
+      externalContext: await askOptional(rl, "Which external docs, APIs, frameworks, or versions matter? "),
+      answerStyle: await askOptional(rl, "What answer style or output shape will be most useful? "),
+      pitfalls: await askOptional(rl, "Known pitfalls, preferences, or project-specific rules? "),
+    };
+
+    const interactiveBrief = renderInteractiveBootstrapBrief(id, answers);
+    const taskBrief = [seed.taskBrief, interactiveBrief].filter((value): value is string => Boolean(value && value.trim())).join("\n\n");
+    const constraints = [
+      ...seed.constraints,
+      answers.boundaries ? `Respect these specialist boundaries/non-goals: ${answers.boundaries}` : undefined,
+      answers.answerStyle ? `Shape the specialist for this preferred output style: ${answers.answerStyle}` : undefined,
+      answers.pitfalls ? `Preserve these project-specific rules/pitfalls: ${answers.pitfalls}` : undefined,
+    ].filter((value): value is string => Boolean(value && value.trim()));
+
+    return {
+      workspaceRoot: seed.workspaceRoot ?? "",
+      id,
+      question: seed.question?.trim() || answers.purpose || `Bootstrap ${id} for this workspace.`,
+      taskBrief,
+      constraints,
+    };
+  } finally {
+    rl.close();
+  }
+}
+
+async function askOptional(
+  rl: ReturnType<typeof createInterface>,
+  prompt: string,
+  existingValue?: string,
+): Promise<string | undefined> {
+  const suffix = existingValue?.trim() ? ` [${existingValue.trim()}]` : "";
+  const answer = await rl.question(`${prompt}${suffix}`);
+  return answer.trim() || existingValue?.trim() || undefined;
+}
+
+function renderInteractiveBootstrapBrief(id: string, answers: Record<string, string | undefined>): string {
+  const lines = [
+    "Interactive bootstrap context provided by the operator:",
+    `- Specialist id: ${id}`,
+    answers.purpose ? `- Intended responsibility: ${answers.purpose}` : undefined,
+    answers.recurringTasks ? `- Recurring tasks/questions: ${answers.recurringTasks}` : undefined,
+    answers.boundaries ? `- Boundaries/non-goals: ${answers.boundaries}` : undefined,
+    answers.repoAreas ? `- Repo areas to inspect first: ${answers.repoAreas}` : undefined,
+    answers.externalContext ? `- External context to verify: ${answers.externalContext}` : undefined,
+    answers.answerStyle ? `- Preferred answer/output style: ${answers.answerStyle}` : undefined,
+    answers.pitfalls ? `- Known pitfalls/preferences/rules: ${answers.pitfalls}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  return lines.join("\n");
 }
 
 function parseArgs(argv: string[]) {

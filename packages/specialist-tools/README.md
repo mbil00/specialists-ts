@@ -32,7 +32,7 @@ Example:
 }
 ```
 
-If the filename is `runtime-architect.json`, the kind becomes `runtime-architect` unless `kind` is explicitly set in the JSON.
+If the filename is `runtime-architect.json`, the specialist id becomes `runtime-architect` unless `id` is explicitly set in the JSON.
 
 ## Usage with pi
 

@@ -33,7 +33,7 @@ Example:
 
 ```bash
 pnpm --filter @specialists/pi-runner smoke -- \
-  --specialist-kind graph-api \
+  --specialist-id graph-api \
   --specialist-name "Microsoft Graph Specialist" \
   --question "Find the official Microsoft Graph API docs for assignLicense and summarize the endpoint and permission." \
   --grounding-mode web_only

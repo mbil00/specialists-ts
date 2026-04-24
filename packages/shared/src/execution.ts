@@ -1,7 +1,7 @@
 export type GroundingMode = "memory_only" | "repo_only" | "web_only" | "repo_and_web";
 
 export interface SpecialistProfileSnapshot {
-  kind: string;
+  id: string;
   name: string;
   rolePrompt: string;
   goals: string[];

@@ -13,7 +13,7 @@ async function main(): Promise<void> {
     workspaceRoot: process.cwd(),
     workspaceDisplayName: path.basename(process.cwd()),
     specialist: {
-      kind: args.specialistKind,
+      id: args.specialistId,
       name: args.specialistName,
       rolePrompt: args.rolePrompt,
       goals: ["Return compact, grounded specialist packets."],
@@ -82,7 +82,7 @@ function parseArgs(argv: string[]) {
   }
 
   return {
-    specialistKind: values.get("specialist-kind")?.at(-1) ?? "research_specialist",
+    specialistId: values.get("specialist-id")?.at(-1) ?? "research_specialist",
     specialistName: values.get("specialist-name")?.at(-1) ?? "Research Specialist",
     rolePrompt:
       values.get("role-prompt")?.at(-1) ??

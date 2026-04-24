@@ -42,10 +42,10 @@ This package currently uses simple JSON persistence inside the target workspace:
 Committed specialist definitions live separately under `.agents/specialists/*.json`.
 
 - `.specialists/workspace.json`
-- `.specialists/profiles/<kind>.json`
-- `.specialists/consultations/<timestamp>-<kind>.json`
-- `.specialists/memory/<kind>/...`
-- `.specialists/artifacts/<kind>/...`
+- `.specialists/profiles/<specialist-id>.json`
+- `.specialists/consultations/<timestamp>-<specialist-id>.json`
+- `.specialists/memory/<specialist-id>/...`
+- `.specialists/artifacts/<specialist-id>/...`
 - `.specialists/out/`
 
 This is intentionally a stepping stone toward richer persistence later.

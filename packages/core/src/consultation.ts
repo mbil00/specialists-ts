@@ -38,7 +38,7 @@ export interface ConsultationPipelineDependencies {
 
 export interface BootstrapRequest {
   workspaceRoot?: string;
-  specialistKind: string;
+  specialistId: string;
   question?: string;
   taskBrief?: string;
   constraints?: string[];
@@ -47,7 +47,7 @@ export interface BootstrapRequest {
 
 export interface WorkspaceConsultationRequest {
   workspaceRoot?: string;
-  specialistKind: string;
+  specialistId: string;
   question: string;
   taskBrief?: string;
   constraints?: string[];
@@ -87,7 +87,7 @@ export function createConsultationPipeline(
   return {
     async bootstrap(request) {
       const workspace = await resolveWorkspace(request.workspaceRoot);
-      const template = (await resolveSpecialistTemplate(workspace, request.specialistKind)).template;
+      const template = (await resolveSpecialistTemplate(workspace, request.specialistId)).template;
       return await bootstrapSpecialist({
         workspace,
         template,
@@ -101,8 +101,8 @@ export function createConsultationPipeline(
 
     async resolve(request) {
       const workspace = await resolveWorkspace(request.workspaceRoot);
-      const template = (await resolveSpecialistTemplate(workspace, request.specialistKind)).template;
-      let profile = await loadWorkspaceSpecialistProfile(workspace, template.kind);
+      const template = (await resolveSpecialistTemplate(workspace, request.specialistId)).template;
+      let profile = await loadWorkspaceSpecialistProfile(workspace, template.id);
       let bootstrapResult: BootstrapSpecialistResult | undefined;
       if (request.forceBootstrap) {
         bootstrapResult = await bootstrapSpecialist({
@@ -118,7 +118,7 @@ export function createConsultationPipeline(
       }
       if (!profile) {
         throw new Error(
-          `Specialist ${JSON.stringify(template.kind)} exists but is not bootstrapped for this workspace. Bootstrap it with the operator CLI before consulting it.`,
+          `Specialist ${JSON.stringify(template.id)} exists but is not bootstrapped for this workspace. Bootstrap it with the operator CLI before consulting it.`,
         );
       }
 
@@ -158,7 +158,7 @@ export function createConsultationPipeline(
         id: consultationId,
         createdAt: now,
         workspaceId: resolution.workspace.id,
-        specialistKind: resolution.profile.specialistKind,
+        specialistId: resolution.profile.specialistId,
         request: resolution.executionRequest,
         result,
       });
@@ -199,7 +199,7 @@ async function buildExecutionRequest(input: {
           input.request.taskBrief,
           ...(input.request.constraints ?? []),
           ...(input.request.assumptions ?? []),
-          input.template.kind,
+          input.template.id,
           input.template.name,
         ]
           .filter((value): value is string => Boolean(value && value.trim()))
@@ -214,15 +214,15 @@ async function buildExecutionRequest(input: {
     input.request.taskBrief ?? "",
     ...(input.request.constraints ?? []),
     ...(input.request.assumptions ?? []),
-    input.template.kind,
+    input.template.id,
     input.template.name,
   ];
-  const memory = await retrieveRelevantMemory(input.workspace, input.template.kind, knowledgeQueries);
-  const artifacts = await retrieveRelevantArtifacts(input.workspace, input.template.kind, knowledgeQueries);
+  const memory = await retrieveRelevantMemory(input.workspace, input.template.id, knowledgeQueries);
+  const artifacts = await retrieveRelevantArtifacts(input.workspace, input.template.id, knowledgeQueries);
 
   const rolePrompt = buildResolvedRolePrompt(input.profile, workspaceObservations, input.workspace);
   const outputDirectory = input.template.capabilities.fileAuthoring
-    ? path.join(input.workspace.outputDir, input.template.kind)
+    ? path.join(input.workspace.outputDir, input.template.id)
     : undefined;
 
   return {

@@ -3,7 +3,7 @@ import type { SpecialistExecutionRequest } from "@specialists/shared";
 export function buildSpecialistSystemPrompt(request: SpecialistExecutionRequest): string {
   const lines = [
     "You are a reusable workspace-scoped specialist consultant.",
-    `Specialist kind: ${request.specialist.kind}`,
+    `Specialist id: ${request.specialist.id}`,
     `Specialist name: ${request.specialist.name}`,
     `Workspace: ${request.workspaceDisplayName}`,
     `Role prompt: ${request.specialist.rolePrompt}`,

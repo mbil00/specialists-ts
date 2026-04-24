@@ -45,9 +45,9 @@ const listSpecialistsTool = defineTool({
     const descriptors = await listSpecialistTemplates(workspace);
     const specialists = await Promise.all(
       descriptors.map(async (descriptor) => {
-        const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.kind);
+        const profile = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.id);
         return {
-          kind: descriptor.template.kind,
+          id: descriptor.template.id,
           name: descriptor.template.name,
           description: descriptor.template.description,
           tags: descriptor.template.tags,
@@ -83,12 +83,12 @@ const consultSpecialistTool = defineTool({
   promptSnippet: "Consult a workspace specialist instead of spending your own context on repo or web research",
   promptGuidelines: [
     "When a relevant specialist exists, use consult_specialist before doing large repo discovery or multi-page web research yourself.",
-    "Pass the most specific specialist kind you can, based on list_specialists output or known workspace conventions.",
+    "Pass the most specific specialist id you can, based on list_specialists output or known workspace conventions.",
     "Use groundingMode to constrain the specialist when the task is clearly repo-only or web-only.",
     "Do not try to create or bootstrap specialists from the main agent; that is operator work.",
   ],
   parameters: Type.Object({
-    kind: Type.String({ description: "Specialist kind from list_specialists." }),
+    specialist: Type.String({ description: "Specialist id from list_specialists." }),
     question: Type.String({ description: "Question or task for the specialist." }),
     taskBrief: Type.Optional(Type.String({ description: "Optional extra operator context or task framing." })),
     constraints: Type.Optional(Type.Array(Type.String({ description: "Constraint or requirement." }))),
@@ -99,7 +99,7 @@ const consultSpecialistTool = defineTool({
   async execute(_toolCallId, rawParams, _signal, onUpdate, ctx) {
     loadDotEnvFromAncestors(ctx.cwd);
     const params = rawParams as {
-      kind: string;
+      specialist: string;
       question: string;
       taskBrief?: string;
       constraints?: string[];
@@ -107,24 +107,24 @@ const consultSpecialistTool = defineTool({
       responseFormat?: "packet" | "markdown" | "json" | "text";
       groundingMode?: "memory_only" | "repo_only" | "web_only" | "repo_and_web";
     };
-    const kind = params.kind?.trim();
+    const specialist = params.specialist?.trim();
     const question = params.question?.trim();
-    if (!kind) {
-      throw new Error("consult_specialist requires a non-empty kind.");
+    if (!specialist) {
+      throw new Error("consult_specialist requires a non-empty specialist.");
     }
     if (!question) {
       throw new Error("consult_specialist requires a non-empty question.");
     }
 
     onUpdate?.({
-      content: [{ type: "text", text: `Consulting specialist ${kind}...` }],
-      details: { phase: "consult", kind, question },
+      content: [{ type: "text", text: `Consulting specialist ${specialist}...` }],
+      details: { phase: "consult", specialist, question },
     });
 
     const pipeline = createSpecialistsPipeline();
     const result = await pipeline.consult({
       workspaceRoot: ctx.cwd,
-      specialistKind: kind,
+      specialistId: specialist,
       question,
       taskBrief: params.taskBrief,
       constraints: params.constraints ?? [],
@@ -142,7 +142,7 @@ const consultSpecialistTool = defineTool({
           rootPath: result.workspace.rootPath,
         },
         specialist: {
-          kind: result.profile.specialistKind,
+          id: result.profile.specialistId,
           name: result.profile.snapshot.name,
         },
         bootstrapCreated: false,
@@ -194,7 +194,7 @@ function createSpecialistsPipeline() {
 function renderSpecialistList(
   workspaceRoot: string,
   specialists: Array<{
-    kind: string;
+    id: string;
     name: string;
     description: string;
     tags: string[];
@@ -209,7 +209,7 @@ function renderSpecialistList(
   for (const specialist of specialists) {
     lines.push(
       "",
-      `${specialist.name} (${specialist.kind})`,
+      `${specialist.name} (${specialist.id})`,
       `Description: ${specialist.description}`,
       `Source: ${specialist.source}${specialist.sourcePath ? ` (${specialist.sourcePath})` : ""}`,
       `Bootstrapped: ${String(specialist.bootstrapped)}`,
@@ -224,7 +224,7 @@ function renderSpecialistList(
 function renderConsultationResult(result: Awaited<ReturnType<ReturnType<typeof createSpecialistsPipeline>["consult"]>>): string {
   const lines = [
     `Workspace: ${result.workspace.displayName} (${result.workspace.rootPath})`,
-    `Specialist: ${result.profile.snapshot.name} (${result.profile.specialistKind})`,
+    `Specialist: ${result.profile.snapshot.name} (${result.profile.specialistId})`,
     `Provider: ${result.executionResult.provider}${result.executionResult.model ? `/${result.executionResult.model}` : ""}`,
     "Bootstrap: existing profile reused",
     `Consultation record: ${result.consultationRecordPath}`,
