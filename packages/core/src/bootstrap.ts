@@ -202,18 +202,18 @@ export async function bootstrapSpecialist(input: BootstrapSpecialistInput): Prom
     bootstrapRepoSummary: repoSummary,
     bootstrapWebSummary: webSummary,
     bootstrapValidationSummary: validationSummary,
-    bootstrapNotes: unique([
+    bootstrapNotes: compactBootstrapNotes([
       ...plan.notes,
       ...(synthesis?.bootstrapNotes ?? []),
-      ...collectFindings(repoPasses, 6),
-      ...collectFindings(webPasses, 6),
-      ...(validationPass?.findings ?? []).slice(0, 6),
+      ...collectFindings(repoPasses, 4),
+      ...collectFindings(webPasses, 3),
+      ...(validationPass?.findings ?? []).slice(0, 4),
     ]),
     bootstrapCitations: unique([
       ...collectCitations(repoPasses),
       ...collectCitations(webPasses),
       ...(validationPass?.citations ?? []),
-    ]).slice(0, 30),
+    ]).slice(0, 20),
     createdAt: now,
     updatedAt: now,
   };
@@ -825,6 +825,27 @@ function collectCitations(passes: BootstrapPassReport[]): string[] {
   return passes.flatMap((pass) => pass.citations);
 }
 
+function compactBootstrapNotes(values: string[], limit: number = 12): string[] {
+  const cleaned = unique(
+    values
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => value.replace(/\s+/g, " ")),
+  );
+
+  const sorted = cleaned.sort((left, right) => scoreBootstrapNote(right) - scoreBootstrapNote(left));
+  return sorted.slice(0, limit);
+}
+
+function scoreBootstrapNote(value: string): number {
+  let score = 0;
+  if (value.startsWith("Verified now:")) score += 4;
+  if (value.startsWith("Inference/recommendation:")) score += 2;
+  if (value.startsWith("Prior context:")) score += 1;
+  score -= Math.max(0, value.length - 220) / 200;
+  return score;
+}
+
 function defaultBootstrapPlan(
   template: SpecialistTemplate,
   question: string | undefined,
@@ -1002,10 +1023,17 @@ function selectSnippet(content: string, queryTerms: Set<string>): string | undef
   if (window.every((line) => !line.trim())) {
     const fallback = lines.slice(0, 5);
     return fallback.length > 0
-      ? fallback.map((line, index) => `${index + 1}: ${line.slice(0, 220)}`).join("\n")
+      ? fallback.map((line, index) => `${index + 1}: ${formatSnippetLine(line)}`).join("\n")
       : undefined;
   }
-  return window.map((line, index) => `${start + index + 1}: ${line.slice(0, 220)}`).join("\n");
+  return window.map((line, index) => `${start + index + 1}: ${formatSnippetLine(line)}`).join("\n");
+}
+
+function formatSnippetLine(line: string, maxLength: number = 320): string {
+  if (line.length <= maxLength) {
+    return line;
+  }
+  return `${line.slice(0, maxLength - 1)}…`;
 }
 
 function scoreObservation(observation: WorkspaceObservation, queryTerms: Set<string>): number {

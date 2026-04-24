@@ -282,22 +282,25 @@ function extractVisitedUrls(toolName: string, args: unknown, result: unknown): s
 
 function extractCitations(toolName: string, result: unknown, touchedFiles: string[], visitedUrls: string[]): string[] {
   const urls = collectUrls(result);
-  const fileCitations = dedupe([
-    ...touchedFiles.map(normalizeRepoCitation).filter((value): value is string => Boolean(value)),
-    ...collectRepoCitations(result),
-  ]);
+  const touchedFileCitations = dedupe(
+    touchedFiles.map(normalizeRepoCitation).filter((value): value is string => Boolean(value)),
+  );
+  const discoveredFileCitations = dedupe(collectRepoCitations(result));
 
   if (toolName === "web_research") {
-    return dedupe([...visitedUrls, ...urls, ...fileCitations]);
+    return dedupe([...visitedUrls, ...urls, ...touchedFileCitations, ...discoveredFileCitations]);
   }
   if (toolName === "web_fetch") {
     return dedupe(visitedUrls.slice(0, 20));
   }
   if (toolName === "read" || toolName === "edit" || toolName === "write") {
-    return dedupe(fileCitations.slice(0, 20));
+    return touchedFileCitations.slice(0, 20);
   }
-  if (toolName === "grep" || toolName === "find" || toolName === "ls" || toolName === "bash") {
-    return dedupe(fileCitations.slice(0, 20));
+  if (toolName === "grep" || toolName === "find" || toolName === "ls") {
+    return dedupe([...touchedFileCitations, ...discoveredFileCitations]).slice(0, 20);
+  }
+  if (toolName === "bash") {
+    return discoveredFileCitations.slice(0, 20);
   }
   return dedupe(urls.slice(0, 20));
 }
@@ -484,7 +487,7 @@ function sanitizeUrl(value: string): string | undefined {
 
 function normalizeRepoCitation(value: string): string | undefined {
   const trimmed = value.trim().replace(/^[\[<("'`]+|[\])>"'`.,;:]+$/g, "").replace(/^file:/, "");
-  if (!trimmed || trimmed === "." || trimmed === "..") {
+  if (!trimmed || trimmed === "." || trimmed === ".." || trimmed.startsWith("/")) {
     return undefined;
   }
   if (!/[./]/.test(trimmed) && !/^[A-Za-z0-9_.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|toml|ya?ml|py|sh|sql)$/.test(trimmed)) {
@@ -493,7 +496,18 @@ function normalizeRepoCitation(value: string): string | undefined {
   if (!/[A-Za-z0-9_-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|toml|ya?ml|py|sh|sql)$/.test(trimmed)) {
     return undefined;
   }
-  return `file:${trimmed.replace(/^\.\//, "")}`;
+
+  const normalized = trimmed.replace(/^\.\//, "");
+  if (!normalized.includes("/") && !normalized.startsWith(".")) {
+    const bareNameAllowed = /^(?:README|CHANGELOG|LICENSE|package|tsconfig|pnpm-workspace|docker-compose|Dockerfile)(?:\.[A-Za-z0-9_-]+)?$/i.test(
+      normalized,
+    );
+    if (!bareNameAllowed) {
+      return undefined;
+    }
+  }
+
+  return `file:${normalized}`;
 }
 
 function selectHighSignalCitations(item: ToolActivityRecord): string[] {
@@ -512,7 +526,37 @@ function selectHighSignalCitations(item: ToolActivityRecord): string[] {
 }
 
 function finalizeCitations(values: string[]): string[] {
-  return pruneRedundantUrls(dedupe(values));
+  return pruneRedundantRepoCitations(pruneRedundantUrls(dedupe(values)));
+}
+
+function pruneRedundantRepoCitations(values: string[]): string[] {
+  const repoValues = values.filter((value) => value.startsWith("file:"));
+  const specificBasenames = new Set(
+    repoValues
+      .map((value) => value.slice(5))
+      .filter((value) => value.includes("/"))
+      .map((value) => value.split("/").at(-1) ?? value),
+  );
+
+  return values.filter((value) => {
+    if (!value.startsWith("file:")) {
+      return true;
+    }
+    const filePath = value.slice(5);
+    if (!filePath.includes("/") && specificBasenames.has(filePath)) {
+      return false;
+    }
+    if (filePath.startsWith("dist/") || filePath.includes("/dist/")) {
+      const sourceVariant = filePath
+        .replace(/^dist\//, "src/")
+        .replace(/\/dist\//g, "/src/")
+        .replace(/\.(?:js|jsx|mjs|cjs)$/, ".ts");
+      if (repoValues.includes(`file:${sourceVariant}`)) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 function pruneRedundantUrls(values: string[]): string[] {

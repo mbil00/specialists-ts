@@ -24,6 +24,7 @@ export function extractAnswerSummary(text: string, maxLength: number = 800): str
       parsed.directAnswer,
       parsed.answer,
       valueAtPath(parsed, ["sections", "summary"]),
+      extractSummaryFromSections(parsed.sections),
     ]);
     if (summary) {
       return truncate(summary, maxLength);
@@ -107,4 +108,25 @@ function valueAtPath(root: Record<string, unknown>, path: string[]): unknown {
     current = (current as Record<string, unknown>)[key];
   }
   return current;
+}
+
+function extractSummaryFromSections(value: unknown): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const summary = firstString([record.summary]);
+    if (summary) {
+      parts.push(summary);
+    }
+    if (parts.length >= 2) {
+      break;
+    }
+  }
+  return parts.length > 0 ? parts.join(" ") : undefined;
 }
