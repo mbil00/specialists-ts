@@ -13,9 +13,11 @@ Operator-managed workspace specialists can live under:
 
 - `.agents/specialists/*.json`
 
-Local-only overrides can live under:
+Local-only specialist definitions can live under:
 
 - `.specialists/templates/*.json`
+
+Specialist ids must be unique across both locations.
 
 Example:
 

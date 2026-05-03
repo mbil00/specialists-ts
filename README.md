@@ -1,31 +1,29 @@
 # specialists-ts
 
-Pi-native TypeScript monorepo rewrite of the Specialists runtime.
+Pi-native TypeScript monorepo for workspace-scoped specialist agents.
 
 ## Intent
 
-This subdirectory is the new implementation target:
+Specialists provides:
 
-- TypeScript-first
-- Pi SDK / extension-native
+- TypeScript-first runtime and tooling
+- Pi SDK / extension-native execution
 - first-class repo grounding
 - first-class web grounding
 - operator-managed specialists committed with the project
 - durable specialist memory and artifacts
 - honest grounding metadata
 
-The existing Python code in the parent repository remains available as a reference during migration.
-
-## Planned workspace layout
+## Workspace layout
 
 - `apps/cli` - operator CLI
-- `apps/api` - HTTP / MCP surface if retained
+- `apps/api` - MCP server surface
 - `packages/core` - domain model, runtime pipeline, persistence
 - `packages/pi-runner` - Pi SDK session integration, specialist execution, and smoke testing
-- `packages/web-tools` - web search + web fetch Pi extension tools
+- `packages/web-tools` - web search, research, and fetch Pi extension tools
 - `packages/specialist-tools` - Pi extension tools that let a main agent list and consult workspace specialists
 - `packages/shared` - shared types / config helpers
-- `docs` - architecture and migration docs
+- `docs` - architecture docs
 
 ## Current status
 
@@ -111,7 +109,7 @@ Local-only operator-managed specialist definitions can live at:
 
 - `.specialists/templates/*.json`
 
-These are additional local-only definitions, not same-id overrides of committed repo definitions.
+These are additional local-only definitions; specialist ids must be unique across both locations.
 The main agent is only meant to list and consult consultation-ready specialists.
 Creation and bootstrap stay in the operator CLI.
 
@@ -170,4 +168,3 @@ That gives the main agent `list_specialists` and `consult_specialist` only.
 ## Current docs
 
 - `docs/architecture.md`
-- `docs/migration-plan.md`

@@ -35,10 +35,10 @@ That means:
 
 ## Non-goals
 
-- preserve Python implementation shape
-- preserve Anthropic/OpenAI provider parity abstraction
+- maintain a provider-parity abstraction that hides Pi-specific capabilities
 - depend on vendor-specific built-in browsing features
 - treat long-lived chat history as specialist memory
+- let the main agent create or mutate specialists during normal consultation
 
 ## System overview
 
@@ -75,13 +75,12 @@ Operator-facing CLI for:
 - trigger refresh or alignment
 
 ### apps/api
-Optional service surface for:
+MCP server surface for the main-agent plane:
 
-- HTTP API
-- MCP server if still useful
-- background jobs / scheduled refreshes
+- `list_specialists`
+- `consult_specialist`
 
-This package should stay thin and delegate to `packages/core`.
+This package should stay thin and delegate to `packages/core`. If an HTTP API or background jobs are added later, they should use the same core orchestration boundaries.
 
 ### packages/core
 Owns the domain model and orchestration:
@@ -93,7 +92,7 @@ Owns the domain model and orchestration:
 - memory distillation and retrieval
 - artifact creation and retrieval
 - grounding metadata model
-- persistence and migrations
+- persistence
 - evaluation harness
 
 This is the product core.
@@ -108,7 +107,7 @@ Owns Pi integration:
 - capture tool activity
 - return normalized execution results
 
-Current scaffold covers:
+Current runtime covers:
 
 - execution request/result DTOs in `packages/shared`
 - prompt builders for specialist system/user prompts
@@ -171,7 +170,7 @@ Responsibilities:
 - expose `consult_specialist`
 - encourage the main agent to consult specialists before doing broad repo/web discovery itself
 - surface operator-managed specialist definitions from `.agents/specialists/*.json`
-- surface local operator overrides from `.specialists/templates/*.json`
+- surface local-only operator definitions from `.specialists/templates/*.json`
 
 ### packages/shared
 Shared primitives only:
@@ -275,7 +274,9 @@ The reusable definition for a specialist kind.
 Templates come from operator-managed workspace sources:
 
 - repo-committed workspace templates under `.agents/specialists/*.json`
-- local-only overrides under `.specialists/templates/*.json`
+- local-only workspace templates under `.specialists/templates/*.json`
+
+Template ids must be unique across both locations.
 
 The main agent should not invent new specialist kinds at consultation time.
 If a specialist does not exist yet, the operator must create and bootstrap it first.
@@ -330,7 +331,7 @@ Examples:
 
 - implementation notes
 - schema maps
-- framework migration checklists
+- framework upgrade checklists
 - research packs
 - generated files
 
@@ -418,7 +419,7 @@ Each response should indicate at least:
 
 ## Bootstrap pipeline
 
-Bootstrap should remain explicit but simpler than the Python version.
+Bootstrap should remain explicit and separated from normal consultation.
 
 Suggested flow:
 
@@ -499,21 +500,21 @@ Output:
 
 ## Persistence
 
-SQLite is still a good fit initially.
+The current runtime uses workspace-local JSON files under `.specialists/` for profiles, consultations, memory, artifacts, and output. Committed specialist definitions live under `.agents/specialists/`.
 
 Suggested rule:
 
-- keep schema simple in v1 rewrite
-- port only tables that are product-critical
-- delay exotic revision machinery until the Pi-native loop is stable
+- keep persistence simple until the core loop requires more
+- store only product-critical records
+- delay complex revision machinery until refresh/alignment workflows justify it
 
-Likely first schema areas:
+If the JSON store becomes limiting, the likely durable record areas are:
 
 - workspaces
-- specialist_templates
-- specialist_profiles
-- consultation_runs
-- memory_items
+- specialist templates
+- specialist profiles
+- consultation runs
+- memory items
 - artifacts
 - citations / evidence refs
 
