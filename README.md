@@ -85,8 +85,19 @@ Example `.mcp.json` entry written by `init`:
 
 This MCP surface intentionally exposes only:
 
-- `list_specialists`
-- `consult_specialist`
+- `list_specialists` — returns bootstrapped, consultation-ready specialists
+- `consult_specialist` — consults an existing bootstrapped specialist
+
+Example MCP consultation payload:
+
+```json
+{
+  "specialist": "runtime-architect",
+  "question": "How should this codebase integrate specialists?",
+  "grounding_mode": "repo_and_web",
+  "response_format": "packet"
+}
+```
 
 Specialist lifecycle remains operator-managed through the CLI.
 
@@ -96,11 +107,12 @@ Committed specialist definitions can live at:
 
 - `.agents/specialists/*.json`
 
-Local-only operator overrides can live at:
+Local-only operator-managed specialist definitions can live at:
 
 - `.specialists/templates/*.json`
 
-The main agent is only meant to list and consult specialists.
+These are additional local-only definitions, not same-id overrides of committed repo definitions.
+The main agent is only meant to list and consult consultation-ready specialists.
 Creation and bootstrap stay in the operator CLI.
 
 Create a specialist definition with the CLI:
@@ -123,13 +135,31 @@ node apps/cli/dist/index.js bootstrap --specialist runtime-architect --interacti
 
 The interactive answers are passed into the existing planner/repo/web/validation/synthesis bootstrap flow; they do not replace model bootstrap.
 
-You can inspect them with the CLI:
+You can inspect all defined specialists with the CLI:
 
 ```bash
 node apps/cli/dist/index.js list
 ```
 
-Or expose them to pi as tools for the main agent:
+The CLI marks whether each specialist has been bootstrapped. Main-agent surfaces only list specialists that are already bootstrapped and ready for consultation.
+
+Consult a bootstrapped specialist from the CLI:
+
+```bash
+node apps/cli/dist/index.js consult \
+  --specialist runtime-architect \
+  --question "How does the consultation pipeline work in this codebase?"
+```
+
+Useful consultation options include:
+
+- `--task-brief "..."`
+- repeated `--constraint "..."`
+- repeated `--assumption "..."`
+- `--grounding-mode memory_only|repo_only|web_only|repo_and_web`
+- `--response-format packet|markdown|json|text`
+
+Or expose bootstrapped specialists to pi as tools for the main agent:
 
 ```bash
 pi -e ./packages/specialist-tools/dist/index.js
