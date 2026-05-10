@@ -162,6 +162,83 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "restore") {
+    const workspaceRoot = args.values.get("workspace-root")?.at(-1);
+    const workspace = await resolveWorkspace(workspaceRoot);
+    const templates = await listSpecialistTemplates(workspace);
+    const requestedSpecialists = args.values.get("specialist") ?? [];
+    const requested = new Set(requestedSpecialists.map((value) => value.trim()).filter(Boolean));
+    const force = args.values.get("force")?.at(-1) === "true";
+    const selectedTemplates = requested.size > 0
+      ? templates.filter((descriptor) => requested.has(descriptor.template.id))
+      : templates;
+    const missing = [...requested].filter((id) => !templates.some((descriptor) => descriptor.template.id === id));
+    if (missing.length > 0) {
+      throw new Error(`Unknown specialist(s) for restore: ${missing.join(", ")}`);
+    }
+
+    console.error(
+      [
+        `Restoring ${selectedTemplates.length} specialist(s) for ${workspace.displayName}.`,
+        "Restore can take a while: each specialist is bootstrapped from its template and grounded in repository/web evidence before a profile is saved.",
+        force ? "Existing profiles will be regenerated because --force was provided." : "Existing profiles will be reused; pass --force to regenerate them.",
+      ].join("\n"),
+    );
+
+    const restored = [];
+    for (const descriptor of selectedTemplates) {
+      const existing = await loadWorkspaceSpecialistProfile(workspace, descriptor.template.id);
+      if (existing && !force) {
+        console.error(`- ${descriptor.template.id}: already restored, skipping.`);
+        restored.push({
+          id: descriptor.template.id,
+          name: existing.snapshot.name,
+          status: "skipped_existing",
+          profilePath: path.join(workspace.profilesDir, `${descriptor.template.id}.json`),
+          updatedAt: existing.updatedAt,
+        });
+        continue;
+      }
+
+      console.error(`- ${descriptor.template.id}: bootstrapping from ${descriptor.sourcePath ?? descriptor.source}...`);
+      const result = await pipeline.bootstrap({
+        workspaceRoot,
+        specialistId: descriptor.template.id,
+        question: `Restore ${descriptor.template.name} for this workspace from its committed template.`,
+        taskBrief: renderRestoreTaskBrief(descriptor.template),
+        constraints: [
+          "Ground the restored profile in evidence from this repository before saving it.",
+          "Preserve the template's explicit intent, goals, non-goals, capabilities, and output contract.",
+          "Prefer project-specific findings over generic advice; mark external context with citations when used.",
+        ],
+        force,
+      });
+      restored.push({
+        id: descriptor.template.id,
+        name: result.profile.snapshot.name,
+        status: result.created ? "restored" : "skipped_existing",
+        profilePath: result.profilePath,
+        updatedAt: result.profile.updatedAt,
+      });
+    }
+
+    console.log(
+      JSON.stringify(
+        {
+          workspace: {
+            id: workspace.id,
+            displayName: workspace.displayName,
+            rootPath: workspace.rootPath,
+          },
+          restored,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
   if (command === "bootstrap") {
     const workspaceRoot = args.values.get("workspace-root")?.at(-1);
     const interactiveContext = shouldRunInteractiveBootstrap(args)
@@ -319,6 +396,23 @@ async function askOptional(
   const suffix = existingValue?.trim() ? ` [${existingValue.trim()}]` : "";
   const answer = await rl.question(`${prompt}${suffix}`);
   return answer.trim() || existingValue?.trim() || undefined;
+}
+
+function renderRestoreTaskBrief(template: { id: string; name: string; description: string; rolePrompt: string; goals: string[]; nonGoals: string[]; tags: string[] }): string {
+  return [
+    "Restore this specialist by regenerating its workspace-bound profile from the committed template.",
+    `Specialist id: ${template.id}`,
+    `Name: ${template.name}`,
+    `Description: ${template.description}`,
+    `Role intent: ${template.rolePrompt}`,
+    template.goals.length > 0 ? `Goals to preserve: ${template.goals.join("; ")}` : undefined,
+    template.nonGoals.length > 0 ? `Non-goals/boundaries to preserve: ${template.nonGoals.join("; ")}` : undefined,
+    template.tags.length > 0 ? `Tags: ${template.tags.join(", ")}` : undefined,
+    "Inspect the repository for files, architecture, conventions, workflows, and docs relevant to this specialist's intent.",
+    "Synthesize durable bootstrap notes that will make future consultations behave similarly on other machines restored from the same template.",
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join("\n");
 }
 
 function renderInteractiveBootstrapBrief(id: string, answers: Record<string, string | undefined>): string {
