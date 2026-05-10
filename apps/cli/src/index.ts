@@ -194,7 +194,7 @@ async function main(): Promise<void> {
           id: descriptor.template.id,
           name: existing.snapshot.name,
           status: "skipped_existing",
-          profilePath: path.join(workspace.profilesDir, `${descriptor.template.id}.json`),
+          profilePath: path.join(workspace.profilesDir, `${safeProfileFileName(descriptor.template.id)}.json`),
           updatedAt: existing.updatedAt,
         });
         continue;
@@ -396,6 +396,10 @@ async function askOptional(
   const suffix = existingValue?.trim() ? ` [${existingValue.trim()}]` : "";
   const answer = await rl.question(`${prompt}${suffix}`);
   return answer.trim() || existingValue?.trim() || undefined;
+}
+
+function safeProfileFileName(specialistId: string): string {
+  return specialistId.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
 }
 
 function renderRestoreTaskBrief(template: { id: string; name: string; description: string; rolePrompt: string; goals: string[]; nonGoals: string[]; tags: string[] }): string {
