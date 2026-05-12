@@ -19,9 +19,9 @@ importers:
       '@specialists/pi-runner':
         specifier: workspace:*
         version: link:../../packages/pi-runner
-      '@specialists/web-tools':
+      '@specialists/shared':
         specifier: workspace:*
-        version: link:../../packages/web-tools
+        version: link:../../packages/shared
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -41,9 +41,9 @@ importers:
       '@specialists/pi-runner':
         specifier: workspace:*
         version: link:../../packages/pi-runner
-      '@specialists/web-tools':
+      '@specialists/shared':
         specifier: workspace:*
-        version: link:../../packages/web-tools
+        version: link:../../packages/shared
     devDependencies:
       '@types/node':
         specifier: ^24.5.2
@@ -113,6 +113,9 @@ importers:
       '@specialists/pi-runner':
         specifier: workspace:*
         version: link:../pi-runner
+      '@specialists/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^24.5.2
@@ -135,6 +138,9 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.49
+      '@specialists/shared':
+        specifier: workspace:*
+        version: link:../shared
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0

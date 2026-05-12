@@ -17,7 +17,7 @@
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@specialists/core": "workspace:*",
     "@specialists/pi-runner": "workspace:*",
-    "@specialists/web-tools": "workspace:*",
+    "@specialists/shared": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -21,7 +21,8 @@
     "@mariozechner/pi-ai": "^0.66.1",
     "@mariozechner/pi-coding-agent": "^0.66.1",
     "@specialists/core": "workspace:*",
-    "@specialists/pi-runner": "workspace:*"
+    "@specialists/pi-runner": "workspace:*",
+    "@specialists/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

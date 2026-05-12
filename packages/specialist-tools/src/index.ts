@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { defineTool } from "@mariozechner/pi-coding-agent";
 import { StringEnum, Type } from "@mariozechner/pi-ai";
@@ -10,6 +7,7 @@ import {
   loadWorkspaceSpecialistProfile,
   resolveWorkspace,
 } from "@specialists/core";
+import { loadDotEnvFromAncestors } from "@specialists/shared";
 import {
   createPiRunner,
   DEFAULT_BOOTSTRAP_MODEL,
@@ -247,29 +245,3 @@ function renderConsultationResult(result: Awaited<ReturnType<ReturnType<typeof c
   return lines.join("\n");
 }
 
-function loadDotEnvFromAncestors(startDir: string): void {
-  const candidates: string[] = [];
-  let current = path.resolve(startDir);
-  while (true) {
-    candidates.push(path.join(current, ".env"));
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  const envPath = candidates.find((candidate) => existsSync(candidate));
-  if (!envPath) return;
-  const content = readFileSync(envPath, "utf8");
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    if (!key || process.env[key] !== undefined) continue;
-    let value = trimmed.slice(separator + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    process.env[key] = value;
-  }
-}
