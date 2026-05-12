@@ -15,7 +15,7 @@
   "dependencies": {
     "@specialists/core": "workspace:*",
     "@specialists/pi-runner": "workspace:*",
-    "@specialists/web-tools": "workspace:*"
+    "@specialists/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

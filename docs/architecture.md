@@ -148,7 +148,7 @@ Expected tools:
 
 Expected responsibilities:
 
-- provider adapters (Exa, Tavily, Brave, Firecrawl, SerpAPI, custom)
+- provider adapters — wired: Brave, Exa (with a Fallback wrapper that chains both); planned: Tavily (implementation exists but not yet wired into `createSearchProvider()` — see issue #5)
 - delegated `web_research` subagent orchestration
 - result normalization
 - freshness metadata
@@ -383,6 +383,8 @@ Each response should indicate at least:
 
 ## Consultation pipeline
 
+Implemented in `packages/core/src/consultation.ts` (`createConsultationPipeline`) as three stages, with `bootstrap` exposed alongside as a separate operator-plane flow.
+
 ## Stage 1: resolve
 
 - resolve workspace
@@ -390,16 +392,9 @@ Each response should indicate at least:
 - resolve consultation mode
 - retrieve memory and artifacts
 - determine output directory if relevant
+- build the execution request via internal `buildExecutionRequest()` — collects workspace observations, decides grounding requirements, precomputes retrieval packets, and prepares the output contract instructions
 
-## Stage 2: prepare
-
-- build consultation context
-- decide whether repo and web grounding are required
-- precompute retrieval packets
-- prepare compact workspace observations
-- prepare output contract instructions
-
-## Stage 3: execute
+## Stage 2: execute
 
 - create Pi session
 - attach built-in tools and extension web tools
@@ -409,7 +404,7 @@ Each response should indicate at least:
 - validate response contract
 - retry once if answer shape is invalid
 
-## Stage 4: finalize
+## Stage 3: finalize
 
 - build truthful grounding metadata
 - persist consultation record

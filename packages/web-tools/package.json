@@ -23,6 +23,7 @@
     "@mariozechner/pi-ai": "^0.66.1",
     "@mariozechner/pi-coding-agent": "^0.66.1",
     "@sinclair/typebox": "^0.34.41",
+    "@specialists/shared": "workspace:*",
     "jsdom": "^26.1.0"
   },
   "devDependencies": {
